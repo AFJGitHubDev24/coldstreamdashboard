@@ -17,7 +17,7 @@ def get_dynamodb_resource():
     return boto3.resource('dynamodb', region_name='us-east-1') # Update region if needed
 
 dynamodb = get_dynamodb_resource()
-TABLE_NAME = "ColdChainTelemetry"
+TABLE_NAME = "ColdChainTelemetry123"
 
 def fetch_telemetry_data(device_id="ESP32_ColdChain_01", limit=50):
     try:
