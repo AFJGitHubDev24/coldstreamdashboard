@@ -19,7 +19,7 @@ def get_dynamodb_resource():
 dynamodb = get_dynamodb_resource()
 TABLE_NAME = "ColdChainTelemetry123"
 
-def fetch_telemetry_data(device_id="ESP32_ColdChain_01", limit=50):
+def fetch_telemetry_data(device_id="coldchainesp32", limit=50):
     try:
         table = dynamodb.Table(TABLE_NAME)
         response = table.query(
