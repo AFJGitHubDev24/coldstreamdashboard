@@ -19,30 +19,34 @@ def get_dynamodb_resource():
 dynamodb = get_dynamodb_resource()
 TABLE_NAME = "ColdChainTelemetry123"
 
-def fetch_telemetry_data(device_id="coldchainesp32", limit=50):
+def fetch_telemetry_data(limit=50):
     try:
         table = dynamodb.Table(TABLE_NAME)
-        response = table.query(
-            KeyConditionExpression=Key('device_id').eq(device_id),
-            ScanIndexForward=False, # Fetch latest records first
-            Limit=limit
-        )
+        # Fetch items from DynamoDB
+        response = table.scan(Limit=limit)
         items = response.get('Items', [])
+        
+        # Convert boto3 Decimal types to float before passing to pandas
+        for item in items:
+            if 'timestamp' in item:
+                item['timestamp'] = float(item['timestamp'])
+            if 'temperature' in item:
+                item['temperature'] = float(item['temperature'])
+            if 'humidity' in item:
+                item['humidity'] = float(item['humidity'])
+                
         df = pd.DataFrame(items)
         
         if not df.empty:
-            # Convert millisecond timestamp to datetime
+            # Convert millisecond timestamp to datetime object
             df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
-            # Ensure numbers are floats
-            df['temperature'] = df['temperature'].astype(float)
-            df['humidity'] = df['humidity'].astype(float)
             df = df.sort_values('datetime', ascending=True)
             
         return df
     except Exception as e:
         st.error(f"Error querying DynamoDB: {e}")
         return pd.DataFrame()
-
+        
 # Dashboard UI
 st.title("❄️ Cold-Chain Management Dashboard")
 st.markdown("Real-time telemetry tracking for cold-chain storage and transit.")
