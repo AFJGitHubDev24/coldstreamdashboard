@@ -19,33 +19,59 @@ def get_dynamodb_resource():
 dynamodb = get_dynamodb_resource()
 TABLE_NAME = "ColdChainTelemetry123"
 
-def fetch_telemetry_data(limit=50):
+def fetch_telemetry_data(device_id="coldchainesp32", limit=300):
     try:
         table = dynamodb.Table(TABLE_NAME)
-        # Fetch items from DynamoDB
-        response = table.scan(Limit=limit)
-        items = response.get('Items', [])
         
-        # Convert boto3 Decimal types to float before passing to pandas
-        for item in items:
-            if 'timestamp' in item:
-                item['timestamp'] = float(item['timestamp'])
-            if 'temperature' in item:
-                item['temperature'] = float(item['temperature'])
-            if 'humidity' in item:
-                item['humidity'] = float(item['humidity'])
-                
-        df = pd.DataFrame(items)
-        
-        if not df.empty:
-            # Convert millisecond timestamp to datetime object
-            df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
-            df = df.sort_values('datetime', ascending=True)
+        # 1. Attempt Query to get LATEST records first
+        try:
+            response = table.query(
+                KeyConditionExpression=Key('device_id').eq(device_id),
+                ScanIndexForward=False,  # Fetch newest items first
+                Limit=limit
+            )
+            items = response.get('Items', [])
+        except Exception:
+            items = []
             
+        # 2. Fallback to Scan if Query is empty or fails
+        if not items:
+            response = table.scan(Limit=limit)
+            items = response.get('Items', [])
+            
+        if not items:
+            return pd.DataFrame()
+
+        # 3. Clean Decimal data types from DynamoDB
+        cleaned_items = []
+        for item in items:
+            row = {}
+            for k, v in item.items():
+                # Convert Decimal or numeric types to standard Python float/int
+                try:
+                    row[k] = float(v)
+                except (ValueError, TypeError):
+                    row[k] = str(v)
+            cleaned_items.append(row)
+
+        df = pd.DataFrame(cleaned_items)
+
+        # 4. Handle Timestamps dynamically
+        if 'timestamp' in df.columns and not df.empty:
+            sample_ts = df['timestamp'].iloc[0]
+            # Detect whether epoch is in milliseconds (> 1e11) or seconds
+            ts_unit = 'ms' if sample_ts > 1e11 else 's'
+            df['datetime'] = pd.to_datetime(df['timestamp'], unit=ts_unit)
+            
+            # Sort chronologically for proper chart rendering
+            df = df.sort_values('datetime', ascending=True)
+
         return df
+
     except Exception as e:
         st.error(f"Error querying DynamoDB: {e}")
         return pd.DataFrame()
+            
         
 # Dashboard UI
 st.title("❄️ Cold-Chain Management Dashboard")
